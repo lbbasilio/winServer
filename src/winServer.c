@@ -2,7 +2,11 @@
 #include "strutils.h"
 
 #include <stdio.h>
+#include <winsock2.h>
 #include <stdlib.h>
+#include <string.h>
+
+#define BUFFER_SIZE 0x0FFF
 
 SOCKET winServerInit (unsigned port)
 {
@@ -47,4 +51,166 @@ SOCKET winServerInit (unsigned port)
 	}
 
 	return soc;
+}
+
+char* winServerReadFile (char* filename, int* fileSize)
+{
+	FILE* inputFile;
+	char* fileContent;
+
+	char filePath[1024];	
+	enum {HTML, CSS, JS, IMG} fileType;
+
+	// TODO: implement strFindLastOf
+	// so it can find files with .'s
+	// in the name
+	
+	int pos = strFindFirstOf (filename, ".", 0);
+	if (pos == -1) fileType = HTML;
+	else
+	{
+		char* format = 	strSubstr (filename, pos, -1); 
+		if (strcmp(format, ".js") == 0) fileType = JS;
+		else if (strcmp(format, ".css") == 0) fileType = CSS;
+		else if (strcmp(format, ".html") == 0) fileType = HTML;
+		else fileType = IMG;
+		free(format);
+	}
+
+	switch (fileType)
+	{
+		case HTML:	strcpy(filePath, "./html/"); break;
+		case CSS:	strcpy(filePath, "./css/");  break;
+		case JS:	strcpy(filePath, "./js/");	 break;
+		case IMG:	strcpy(filePath, "./img/");	 break;
+	}
+
+	strCat(filePath, filename);
+	inputFile = fopen(filePath, "rb");
+
+	if (inputFile)
+	{
+		// Get file size
+		fseek(inputFile, 0, SEEK_END);
+		size_t size = ftell(inputFile);
+		fileContent = malloc(size + 1);	
+		*fileSize = size;
+
+		// Read file
+		rewind(inputFile); 
+		fread((void*) fileContent, sizeof(char), size, inputFile);
+		fclose(inputFile);
+
+		// Add NUL termination
+		fileContent[size] = '\0';
+
+	}
+	else
+	{
+		printf ("Unable to open file %s", filePath);
+		fileContent = NULL;		
+		*fileSize = 0;
+	}
+
+	return fileContent;
+}
+
+void winServerLoop (SOCKET soc)
+{
+	for (;;)
+	{
+		SOCKET connection;
+		char rcvLine[BUFFER_SIZE];
+
+		// Bind socket and read messages...
+		connection = accept(soc, NULL, NULL);
+		memset(rcvLine, 0, BUFFER_SIZE);		
+		int n = 0;
+		while ((n = recv(connection, rcvLine, BUFFER_SIZE-1, 0)) > 0)
+		{
+			printf("%s\n", rcvLine);		
+			if (rcvLine[n - 1] == '\n') break;
+			memset((void*) rcvLine, 0, BUFFER_SIZE);
+		}
+
+		if (n < 0)
+		{
+			printf("Error while reading message. CODE: %d", WSAGetLastError());
+			break;
+		}
+
+		// Process Request
+		// TODO: Create Http Parsing Function
+
+		int tokenCount;
+		char** tokens = strSplit (rcvLine, "\r\n", &tokenCount);
+		char file[255];
+		if (tokens)
+		{
+			int pos = strFindFirstOf (tokens[1], ".", 0);
+			if (pos == -1)
+			{
+				if (strcmp(tokens[1], "/") == 0) strcpy(file, "/index.html");
+				else strcpy(file, tokens[1]);
+			}
+			else strcpy(file, tokens[1]);
+		}
+
+		int size;
+		char* payload = winServerReadFile (file, &size);
+
+		// Respond to request
+		char* buffer = winServerCreateResponse(tokens, tokenCount, size);
+		memmove(buffer + strlen(buffer), payload, size + 1);
+		
+		send(connection, buffer, strlen(buffer), 0);
+		closesocket(connection);
+
+		free(buffer);
+		free(payload);
+		free(tokens);
+	}
+
+	WSACleanup();
+}
+
+// TODO: change winServerReadFile to receive file type
+// and determine fileType inside winServerCreateResponse
+char* winServerCreateResponse(char** tokens, int tokenCount, int payloadSize)
+{
+	char headerType[255];
+	enum {HTML, CSS, JS, IMG} fileType;
+
+	tokenCount;
+	// TODO: implement strFindLastOf
+	// so it can find files with .'s
+	// in the name
+	
+	int pos = strFindFirstOf (tokens[1], ".", 0);
+	if (pos == -1) fileType = HTML;
+	else
+	{
+		char* format = 	strSubstr (tokens[1], pos, -1); 
+		if (strcmp(format, ".js") == 0) fileType = JS;
+		else if (strcmp(format, ".css") == 0) fileType = CSS;
+		else if (strcmp(format, ".html") == 0) fileType = HTML;
+		else fileType = IMG;
+		free(format);
+	}
+
+	switch (fileType)
+	{
+		case HTML: strcpy(headerType, "text/html"); break;
+		case CSS: strcpy(headerType, "text/css"); break;
+		case JS: strcpy(headerType, "text/javascript; charset=UTF-8"); break;
+		case IMG: strcpy(headerType, "image/x-icon"); break;
+	}
+
+	char header[1024];
+	sprintf(header, "HTTP/1.1 200 OK\r\ncontent-encoding: identity\r\ncontent-length: %d\r\ncontent-type: %s\r\n\r\n", payloadSize, headerType);
+	int fullSize = strlen(header) + payloadSize; 
+	char* buffer = malloc(fullSize + 1); // NUL termination
+	strcpy(buffer, header);
+	
+	return buffer;
 }

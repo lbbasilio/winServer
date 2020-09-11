@@ -10,5 +10,6 @@ int strFindFirstNotOf (char* src, char* targets, int start);
 char* strSubstr (char* src, int start, int end);
 char* strDup (char* src);
 void strToUpper (char* src);
+void strCat (char* dst, char* src);
 
 #endif

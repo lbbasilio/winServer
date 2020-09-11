@@ -133,10 +133,10 @@ char* strSubstr (char* src, int start, int end)
 	if (src)
 	{
 		int length = strlen(src);
-		if (start > length - 1 || start >= end || start < 0 || end < 0) return NULL;
+		if (start > length - 1 || start >= end || start < 0) return NULL;
 		else 
 		{
-			if (end > length) end = length;
+			if (end > length || end < 0) end = length;
 			
 			int charCount = end - start;
 			newStr = malloc(sizeof(char) * (charCount + 1));
@@ -178,5 +178,17 @@ void strToUpper (char* src)
 			if (ch > 0x60 && ch < 0x7B)
 				src[i] = ch - 0x20;
 		}
+	}
+}
+
+void strCat (char* dst, char* src)
+{
+	if (dst && src)
+	{
+		int dstLen = strlen(dst);
+		int srcLen = strlen(src);
+		int i;
+		for (i = 0; i < srcLen; ++i) dst[dstLen + i] = src[i];
+		dst[dstLen + srcLen + 1] = '\0';
 	}
 }

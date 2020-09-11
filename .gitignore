@@ -1,3 +1,9 @@
 *.swp
 *~
 *.o
+*.exe
+html/
+css/
+img/
+bin/
+js/
