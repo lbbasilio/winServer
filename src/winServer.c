@@ -69,7 +69,7 @@ char* winServerReadFile (char* filename, int* fileSize)
 	if (pos == -1) fileType = HTML;
 	else
 	{
-		char* format = 	strSubstr (filename, pos, -1); 
+		char* format = 	strSubstr (filename, pos, 1024); 
 		if (strcmp(format, ".js") == 0) fileType = JS;
 		else if (strcmp(format, ".css") == 0) fileType = CSS;
 		else if (strcmp(format, ".html") == 0) fileType = HTML;
@@ -115,60 +115,96 @@ char* winServerReadFile (char* filename, int* fileSize)
 	return fileContent;
 }
 
+char* winServerRcv (SOCKET connection, int* status)
+{
+	char* rcvLine = malloc(BUFFER_SIZE * sizeof(char));
+	memset(rcvLine, 0, BUFFER_SIZE);		
+
+	int n = 0;
+	while ((n = recv(connection, rcvLine, BUFFER_SIZE-1, 0)) > 0)
+	{
+		printf("%s\n", rcvLine);		
+		if (rcvLine[n - 1] == '\n') break;
+		memset(rcvLine, 0, BUFFER_SIZE);
+	}
+
+	if (n < 0)
+	{
+		printf("Error while reading message. CODE: %d", WSAGetLastError());
+		*status = -1;
+		free(rcvLine);
+		return NULL;
+	}
+
+	*status = 0;
+	return rcvLine;
+}
+
+char* winServerProcessRequest (char* rcvLine, int* rspSize)
+{
+	// TODO: http request processing
+	
+	
+	// Read requested file
+	int tokenCount;
+	char** tokens = strSplit (rcvLine, " \t\r\n", &tokenCount);
+	char file[255];
+	if (tokens)
+	{
+		int pos = strFindFirstOf (tokens[1], ".", 0);
+		if (pos == -1)
+		{
+			if (strcmp(tokens[1], "/") == 0) strcpy(file, "/index.html");
+			else strcpy(file, tokens[1]);
+		}
+		else strcpy(file, tokens[1]);
+	}
+
+	// Read file and generate response
+	int size;
+	char* payload = winServerReadFile (file, &size);
+	char* rspLine = NULL;
+	*rspSize = 0;
+	if (size)
+	{
+		rspLine = winServerCreateResponse(tokens, tokenCount, size);
+		*rspSize = strlen(rspLine) + size + 1;
+		memmove(rspLine + strlen(rspLine), payload, size + 1);	
+	}
+
+	// Cleanup
+	int i;
+	for (i = 0; i < tokenCount; ++i) free(tokens[i]);
+	free(tokens);
+	free(payload);
+
+	return rspLine;
+}
+
 void winServerLoop (SOCKET soc)
 {
 	for (;;)
 	{
-		SOCKET connection;
-		char rcvLine[BUFFER_SIZE];
+		SOCKET connection = accept(soc, NULL, NULL);
 
-		// Bind socket and read messages...
-		connection = accept(soc, NULL, NULL);
-		memset(rcvLine, 0, BUFFER_SIZE);		
-		int n = 0;
-		while ((n = recv(connection, rcvLine, BUFFER_SIZE-1, 0)) > 0)
-		{
-			printf("%s\n", rcvLine);		
-			if (rcvLine[n - 1] == '\n') break;
-			memset((void*) rcvLine, 0, BUFFER_SIZE);
-		}
-
-		if (n < 0)
-		{
-			printf("Error while reading message. CODE: %d", WSAGetLastError());
-			break;
-		}
-
+		// Receive request
+		int status;
+		char* rcvLine = winServerRcv (connection, &status);
+		if (status) continue;
+		
+		fprintf(stdin, "\n%s", rcvLine);
 		// Process Request
-		// TODO: Create Http Parsing Function
-
-		int tokenCount;
-		char** tokens = strSplit (rcvLine, "\r\n", &tokenCount);
-		char file[255];
-		if (tokens)
-		{
-			int pos = strFindFirstOf (tokens[1], ".", 0);
-			if (pos == -1)
-			{
-				if (strcmp(tokens[1], "/") == 0) strcpy(file, "/index.html");
-				else strcpy(file, tokens[1]);
-			}
-			else strcpy(file, tokens[1]);
-		}
-
-		int size;
-		char* payload = winServerReadFile (file, &size);
+		int rspSize;
+		char* rspLine = winServerProcessRequest(rcvLine, &rspSize);
+		if (!rspLine) continue;
+		// TODO: add 404 page
 
 		// Respond to request
-		char* buffer = winServerCreateResponse(tokens, tokenCount, size);
-		memmove(buffer + strlen(buffer), payload, size + 1);
-		
-		send(connection, buffer, strlen(buffer), 0);
+		send(connection, rspLine, rspSize, 0);
 		closesocket(connection);
 
-		free(buffer);
-		free(payload);
-		free(tokens);
+		free(rcvLine);
+		free(rspLine);
 	}
 
 	WSACleanup();
@@ -190,7 +226,7 @@ char* winServerCreateResponse(char** tokens, int tokenCount, int payloadSize)
 	if (pos == -1) fileType = HTML;
 	else
 	{
-		char* format = 	strSubstr (tokens[1], pos, -1); 
+		char* format = 	strSubstr (tokens[1], pos, 1024); 
 		if (strcmp(format, ".js") == 0) fileType = JS;
 		else if (strcmp(format, ".css") == 0) fileType = CSS;
 		else if (strcmp(format, ".html") == 0) fileType = HTML;

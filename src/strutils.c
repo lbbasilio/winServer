@@ -189,6 +189,6 @@ void strCat (char* dst, char* src)
 		int srcLen = strlen(src);
 		int i;
 		for (i = 0; i < srcLen; ++i) dst[dstLen + i] = src[i];
-		dst[dstLen + srcLen + 1] = '\0';
+		dst[dstLen + srcLen] = '\0';
 	}
 }
