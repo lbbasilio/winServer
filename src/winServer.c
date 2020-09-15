@@ -2,9 +2,9 @@
 #include "strutils.h"
 
 #include <stdio.h>
-#include <winsock2.h>
 #include <stdlib.h>
 #include <string.h>
+#include <winsock2.h>
 
 #define BUFFER_SIZE 0x0FFF
 
@@ -66,7 +66,11 @@ char* winServerReadFile (char* filename, int* fileSize)
 	// in the name
 	
 	int pos = strFindFirstOf (filename, ".", 0);
-	if (pos == -1) fileType = HTML;
+	if (pos == -1)
+	{
+		fileType = HTML;
+		strCat(filename, ".html");
+	}
 	else
 	{
 		char* format = 	strSubstr (filename, pos, 1024); 
@@ -149,6 +153,7 @@ char* winServerProcessRequest (char* rcvLine, int* rspSize)
 	int tokenCount;
 	char** tokens = strSplit (rcvLine, " \t\r\n", &tokenCount);
 	char file[255];
+	memset(file, 0, 255);
 	if (tokens)
 	{
 		int pos = strFindFirstOf (tokens[1], ".", 0);
@@ -185,10 +190,13 @@ void winServerLoop (SOCKET soc)
 {
 	for (;;)
 	{
-		SOCKET connection = accept(soc, NULL, NULL);
+		SOCKET connection;
+		printf("Waiting for connection...\n");
+		connection = accept(soc, NULL, NULL);
 
 		// Receive request
 		int status;
+		printf("Reading messages...");
 		char* rcvLine = winServerRcv (connection, &status);
 		if (status) continue;
 		
