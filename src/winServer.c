@@ -111,7 +111,7 @@ char* winServerReadFile (char* filename, int* fileSize)
 	}
 	else
 	{
-		printf ("Unable to open file %s", filePath);
+		printf ("Unable to open file %s\n", filePath);
 		fileContent = NULL;		
 		*fileSize = 0;
 	}
@@ -125,12 +125,15 @@ char* winServerRcv (SOCKET connection, int* status)
 	memset(rcvLine, 0, BUFFER_SIZE);		
 
 	int n = 0;
-	while ((n = recv(connection, rcvLine, BUFFER_SIZE-1, 0)) > 0)
+	/*while ((n = recv(connection, rcvLine, BUFFER_SIZE-1, 0)) > 0)
 	{
 		printf("%s\n", rcvLine);		
 		if (rcvLine[n - 1] == '\n') break;
 		memset(rcvLine, 0, BUFFER_SIZE);
-	}
+	}*/
+	n = recv(connection, rcvLine, BUFFER_SIZE-1, 0);
+	if (n) printf("%s\n", rcvLine);
+
 
 	if (n < 0)
 	{
@@ -196,7 +199,7 @@ void winServerLoop (SOCKET soc)
 
 		// Receive request
 		int status;
-		printf("Reading messages...");
+		printf("Reading messages...\n");
 		char* rcvLine = winServerRcv (connection, &status);
 		if (status) continue;
 		
@@ -220,6 +223,7 @@ void winServerLoop (SOCKET soc)
 
 // TODO: change winServerReadFile to receive file type
 // and determine fileType inside winServerCreateResponse
+// TODO: discern between GET and POST methods
 char* winServerCreateResponse(char** tokens, int tokenCount, int payloadSize)
 {
 	char headerType[255];
